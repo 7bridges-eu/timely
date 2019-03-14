@@ -4,9 +4,14 @@ Timely is a Clojure library for scheduling tasks according to a timetable, as an
 
 ## Installation
 
-The library is hosted at <a href="https://clojars.org/factual/timely">Clojars</a>. Just add this to your dependencies:
+Add this to your `deps.edn` file:
 
-[![Clojars Project](https://img.shields.io/clojars/v/factual/timely.svg)](https://clojars.org/factual/timely)
+``` clojure
+{:deps
+ {7bridges-eu/timely
+  {:git/url "https://github.com/7bridges-eu/timely"
+  :sha "8e99a4d8da00d0518784193ce03a049d8b9e3030"}}}
+```
 
 ## Setup
 
