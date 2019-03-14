@@ -6,25 +6,26 @@ Timely is a Clojure library for scheduling tasks according to a timetable, as an
 
 The library is hosted at <a href="https://clojars.org/factual/timely">Clojars</a>. Just add this to your dependencies:
 
-```
-[factual/timely "0.0.3"]
-```
+[![Clojars Project](https://img.shields.io/clojars/v/factual/timely.svg)](https://clojars.org/factual/timely)
 
 ## Setup
 
-```
+```clojure
 (ns yournamespace.core
   (:require [timely.core :as timely]))
-  (timely/start-scheduler)
+
+(def scheduler (timely/start-scheduler))
 ```
 
 ## Schedule DSL and Cron
 
 Schedules are a structured way to represent cron syntax and are created using a DSL which reads much like an English sentence.  To get a cron string from a schedule, use schedule-to-cron.  For example:
 
-	timely.core> (schedule-to-cron (each-minute))
-	"* * * * *"
-	
+```clojure
+timely.core> (schedule-to-cron (each-minute))
+"* * * * *"
+```
+
 See the "Define Schedules" section below for more examples of the schedule DSL.
 
 ## Define Schedules
@@ -32,12 +33,17 @@ See the "Define Schedules" section below for more examples of the schedule DSL.
 Define a scheduled-item using a schedule and a function to be executed on the defined schedule. For example:
 
 ```clojure
+(defn test-print-fn [id]
+  (fn []
+    (println "Task" id "scheduled at: " (java.util.Date.))))
+
 ;; Daily at 12:00am
-(scheduled-item (daily)
-				(test-print-fn 1))
+(scheduled-item
+  (daily)
+  (test-print-fn 1))
 ```
 
-(daily) creates a schedule that runs each day at 12:00am.  (test-print-fn 1) returns a function that will print a message.  The combined scheduled-item will print the message each day at 12:00am.
+`(daily)` creates a schedule that runs each day at 12:00am.  `(test-print-fn 1)` returns a function that will print a message.  The combined scheduled-item will print the message each day at 12:00am.
 
 Specific start and end times can be optionally defined to ensure a repeated schedule is only valid for a certain time frame.  This is a feature recognized by the Timely scheduler but does not exist in cron string syntax.
 
@@ -115,20 +121,28 @@ The following are further examples of the dsl for defining schedules:
   (start-time 1337107320000)
   (end-time 1337107380000))
  (test-print-fn "specific-time-range"))
-```     
-          
+```
+
 ## Run Schedules
 
-Use (start-scheduler) to enable scheduling in your application.
-
-Use start-schedule and end-schedule to start and stop schedules in your application:
+Use `start-scheduler` to start schedules in your application:
 
 ```clojure
-(start-scheduler)
+(def scheduler (start-scheduler))
+```
+
+Use `end-schedule` to deschedule a task with the specified id:
+```clojure
 (let [item (scheduled-item
             (each-minute)
             (test-print-fn "Scheduled using start-schedule"))]
-  (let [sched-id (start-schedule item)]
+  (let [sched-id (start-schedule scheduler item)]
     (Thread/sleep (* 1000 60 2))
-    (end-schedule sched-id)))
+    (end-schedule scheduler sched-id)))
+```
+
+Use `stop-scheduler` to shutdown the scheduler instance:
+
+```clojure
+(stop-scheduler scheduler)
 ```

@@ -1,10 +1,12 @@
 (ns timely.test.core
-  (:use [timely.core])
-  (:use [clojure.test])
-  (:require [clj-time.core :as dates])
-  (:require [clj-time.coerce :as dates-coerce]))
+  (:require [timely.core :refer :all]
+            [clojure.test :refer :all]
+            [clj-time.core :as dates]
+            [clj-time.coerce :as dates-coerce]))
 
 ;; Demo and testing
+
+(def scheduler (start-scheduler))
 
 (defn to-utc-timestamp
   "Convert from clj-time date to a timestamp in the utc timezone"
@@ -30,9 +32,9 @@
   (let [item (scheduled-item
               (each-minute)
               (test-print-fn "Scheduled using start-schedule"))]
-    (let [sched-id (start-schedule item)]
+    (let [sched-id (start-schedule scheduler item)]
       (Thread/sleep (* 1000 60 2))
-      (end-schedule sched-id)))
+      (end-schedule scheduler sched-id)))
   (while true
     (Thread/sleep (* 1000 60))))
 

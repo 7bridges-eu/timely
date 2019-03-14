@@ -1,23 +1,24 @@
 (ns timely.core
-  (:require [clj-time.core :as dates])
-  (:require [clj-time.coerce :as dates-coerce])
-  (:require [clojure.string :only (join)])
-  (:import [it.sauronsoftware.cron4j Scheduler])
-  (:use [clojure.tools.logging :only (info debug error)]))
+  (:require
+   [clj-time.core :as dates]
+   [clj-time.coerce :as dates-coerce]
+   [clojure.string :refer [join]]
+   [clojure.tools.logging :refer [info debug error]])
+  (:import it.sauronsoftware.cron4j.Scheduler))
 
 (def time-types
-  (hash-set :minute :hour :day :month :day-of-week))
+  #{:minute :hour :day :month :day-of-week})
 
 (defn valid-time-type
   "Convert a time type to a valid value, else an exception is thrown"
   [type]
-  (let [type-transformed (condp = type
-                                :minutes :minute
-                                :hours :hour
-                                :days :day
-                                :months :month
-                                :days-of-week :day-of-week
-                                type)]
+  (let [type-transformed (case type
+                           :minutes :minute
+                           :hours :hour
+                           :days :day
+                           :months :month
+                           :days-of-week :day-of-week
+                           type)]
     (if (contains? time-types type-transformed)
       type-transformed
       (throw ( Exception. (str "Not a valid time type: " type))))))
@@ -25,73 +26,63 @@
 (defn to-day-of-week
   "Convert a named day of the week to a number representation"
   [day-of-week]
-  (if (= :all day-of-week)
-    day-of-week
-    (condp = day-of-week
-        :sun 0
-        :mon 1
-        :tue 2
-        :wed 3
-        :thu 4
-        :fri 5
-        :sat 6
-        (throw ( Exception. (str "Not a valid day of the week: " day-of-week))))))
+  (case day-of-week
+    :all :all
+    :sun 0
+    :mon 1
+    :tue 2
+    :wed 3
+    :thu 4
+    :fri 5
+    :sat 6
+    (throw ( Exception. (str "Not a valid day of the week: " day-of-week)))))
 
 (defn to-month
   "Convert a named month to a number representation"
   [month]
-  (if (= :all month)
-    month
-    (condp = month
-        :jan 1
-        :feb 2
-        :mar 3
-        :apr 4
-        :may 5
-        :jun 6
-        :jul 7
-        :aug 8
-        :sep 9
-        :oct 10
-        :nov 11
-        :dec 12
-        (throw ( Exception. (str "Not a valid month: " month))))))
+  (condp = month
+    :all :all
+    :jan 1
+    :feb 2
+    :mar 3
+    :apr 4
+    :may 5
+    :jun 6
+    :jul 7
+    :aug 8
+    :sep 9
+    :oct 10
+    :nov 11
+    :dec 12
+    (throw ( Exception. (str "Not a valid month: " month)))))
+
+(defn- number-in-range [id n from to]
+  (when-not (number? n)
+    (throw (Exception. (str id " value: " n " must be a number"))))
+  (when-not (and (>= n from) (<= n to))
+    (throw (Exception. (str id " value: " n " is outside of accepted range of " from "-" to))))
+  (long n))
 
 (defn to-minute
   "Convert to a valid minute number representation"
   [minute]
   (if (= :all minute)
     minute
-    (if (instance? Long minute)
-      (if (and (>= minute 0)
-               (<= minute 59))
-        minute
-        (throw ( Exception. (str "Minute is out of accepted range: " minute ".  Accepted range is 0-59"))))
-      (throw ( Exception. (str "Not a valid minute: " minute))))))
+    (number-in-range "Minute" minute 0 59)))
 
 (defn to-hour
   "Convert to a valid hour number representation"
   [hour]
   (if (= :all hour)
     hour
-    (if (instance? Long hour)
-      (if (and (>= hour 0)
-               (<= hour 23))
-        hour
-        (throw ( Exception. (str "Hour is out of accepted range: " hour ".  Accepted range is 0-23"))))
-      (throw ( Exception. (str "Not a valid hour: " hour))))))
+    (number-in-range "Hour" hour 0 23)))
 
 (defn to-day
   "Convert to a valid day number representation"
   [day]
   (if (= :all day)
     day
-    (if (instance? Long day)
-      (if (and (>= day 1)
-               (<= day 31))
-        day
-        (throw ( Exception. (str "Day is out of accepted range: " day ".  Accepted range is 1-31"))))
-      (throw ( Exception. (str "Not a valid day: " day))))))
+    (number-in-range "Day" day 1 31)))
 
 (defn to-date-number
   "Convert a named date field value of type \"type\" to a number
@@ -99,8 +90,8 @@
   [type value]
   (if (contains? time-types type)
     (if (map? value)
-      (reduce #(assoc %1 (first %2) (to-date-number type (second %2))) {} value)
-      (condp = type
+      (reduce (fn [m [k v]] (assoc m k (to-date-number type v))) {} value)
+      (case type
         :day-of-week (to-day-of-week value)
         :month (to-month value)
         :minute (to-minute value)
@@ -114,10 +105,10 @@
   filters: at, on, each, start-time, end-time"
   [minute hour day month day-of-week & filters]
   (apply merge
-         {:minute (to-date-number :minute minute)
-          :hour (to-date-number :hour hour)
-          :day (to-date-number :day day)
-          :month (to-date-number :month month)
+         {:minute      (to-date-number :minute minute)
+          :hour        (to-date-number :hour hour)
+          :day         (to-date-number :day day)
+          :month       (to-date-number :month month)
           :day-of-week (to-date-number :day-of-week day-of-week)}
          filters))
 
@@ -154,7 +145,7 @@
    9) (minute 10))) runs weekly on Wednesday at 9:10am.  If not
    specified, a default day of Sunday and a default hour and minute of
    0 is used.  Filters available: at, on, each, start-time, end-time"
-   [& filters]
+  [& filters]
   (apply (partial create-schedule 0 0 :all :all 0) filters))
 
 (defn monthly
@@ -271,7 +262,7 @@
 (defn month
   "Month representation"
   [& month]
-     {:month (map #(to-date-number :month %) month)})
+  {:month (map #(to-date-number :month %) month)})
 
 (defn day-of-week
   "Day of week representation"
@@ -297,47 +288,44 @@
   [timestamp]
   (let [date (dates/to-time-zone (dates-coerce/from-long timestamp)
                                  (dates/default-time-zone))]
-    (clojure.string/join " "
-                         [ (dates/minute date)
-                           (dates/hour date)
-                           (dates/day date)
-                           (dates/month date)
-                           (dates/day-of-week date)])))
+    (join " "
+          [(dates/minute date)
+           (dates/hour date)
+           (dates/day date)
+           (dates/month date)
+           (dates/day-of-week date)])))
 
 (defn to-cron-entry
   "Convert a schedule date field value representation to a cron entry"
   [item]
   (cond
-   (= :all item) "*"
-   (or (seq? item) (vector? item)) (clojure.string/join "," (map to-cron-entry item))
-   (map? item) (if-let [interval (:interval item)]
-                 (str "*/" interval)
-                 (str (:start item) "-" (:end item)))
-   (instance? Number item) item
-   :else (throw ( Exception. (str "Error in converting to cron: " item)))))
+    (= :all item) "*"
+    (or (seq? item) (vector? item)) (join "," (map to-cron-entry item))
+    (map? item) (if-let [interval (:interval item)]
+                  (str "*/" interval)
+                  (str (:start item) "-" (:end item)))
+    (number? item) item
+    :else (throw ( Exception. (str "Error in converting to cron: " item)))))
 
 (defn schedule-to-cron
   "Create a cron string from a schedule"
   [sched]
-  (clojure.string/join " " (map to-cron-entry [(sched :minute) (sched :hour) (sched :day) (sched :month) (sched :day-of-week)])))
+  (join " " (map to-cron-entry [(sched :minute) (sched :hour) (sched :day) (sched :month) (sched :day-of-week)])))
 
 (defn scheduled-item
   "Create a scheduled item using a schedule and a function to execute
 on intervals defined in the schedule."
   ([schedule work]
-     {:schedule schedule
-      :work work}))
-
-;; Single scheduler for Timely
-(def SCHEDULER (Scheduler.))
+   {:schedule schedule
+    :work work}))
 
 (defn end-schedule
   "Removes a schedule from Timely by descheduling based on a schedule
   id.  The schedule id is a unique identifier that was generated upon
   starting a schedule."
-  [sched-id]
+  [scheduler sched-id]
   (info "Ending schedule:" sched-id)
-  (.deschedule SCHEDULER sched-id))
+  (.deschedule scheduler sched-id))
 
 (defn process-scheduled-item
   "Executes work for a scheduled item, but only if within optionally
@@ -357,8 +345,8 @@ on intervals defined in the schedule."
 
 (defn begin-schedule
   "Begin a schedule, returning a unique id for the added schedule."
-  [work cron start-time end-time]
-  (.schedule SCHEDULER cron #(process-scheduled-item work start-time end-time)))
+  [scheduler work cron start-time end-time]
+  (.schedule scheduler cron #(process-scheduled-item work start-time end-time)))
 
 (defn to-date-obj
   [timestamp]
@@ -369,7 +357,7 @@ on intervals defined in the schedule."
   "Adds the specified schedule to the scheduler based on start/end
   time restrictions.  Returns a unique identifier for this schedule
   that can be used to later deschedule."
-  [{:keys [schedule work]}]
+  [scheduler {:keys [schedule work]}]
   (let [start_time (to-date-obj (:start-time schedule))
         end_time (to-date-obj (:end-time schedule))
         cron (schedule-to-cron schedule)
@@ -379,8 +367,16 @@ on intervals defined in the schedule."
       (info "End date is before current time, not scheduling:" cron)
       (do
         (info "Starting schedule:" cron)
-        (begin-schedule work cron start_time end_time)))))
+        (begin-schedule scheduler work cron start_time end_time)))))
 
 (defn start-scheduler
+  "creates a new scheduler and starts it
+   returns an instance of the scheduler
+   that can be stopped using stop-scheduler"
   []
-  (.start SCHEDULER))
+  (doto (Scheduler.) (.start)))
+
+(defn stop-scheduler
+  "stops a running scheduler"
+  [scheduler]
+  (.stop scheduler))
